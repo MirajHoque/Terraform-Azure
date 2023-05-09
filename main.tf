@@ -39,3 +39,19 @@ resource "azurerm_storage_account" "demo-sta" {
     environment = "dev"
   }
 }
+
+//stroage container
+resource "azurerm_storage_container" "test-container" {
+  name                  = "mt32444"
+  storage_account_name  = "demostorage32444"
+  container_access_type = "blob"
+}
+
+//this is used to upload a local file on the container
+resource "azurerm_storage_blob" "sample" {
+  name                   = "bkashDevOps.txt"
+  storage_account_name   = "demostorage32444"
+  storage_container_name = "mt32444"
+  type                   = "Block"
+  source                 = "C:/Users/USER/OneDrive/Documents/bkashDevOps.txt"
+}
