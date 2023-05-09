@@ -28,11 +28,12 @@ resource "azurerm_resource_group" "mtc-rg" {
 
 //storage account 
 resource "azurerm_storage_account" "demo-sta" {
-  name                     = "demostorage32444"
-  resource_group_name      = "mtc-resources"
-  location                 = "Canada Central"
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+  name                          = "demostorage32444"
+  resource_group_name           = "mtc-resources"
+  location                      = "Canada Central"
+  account_tier                  = "Standard"
+  account_replication_type      = "LRS"
+  public_network_access_enabled = true
 
   tags = {
     environment = "dev"
