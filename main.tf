@@ -20,17 +20,29 @@ provider "azurerm" {
   }
 }
 
+//variable
+variable "storage_account_name" {
+  type        = string
+  description = "Please enter the storage account name"
+}
+
+//locals: local variable that will only be used current terraform configuration file
+locals {
+  resource_group_name = "mtc-resource"
+  location            = "Canada Central"
+}
+
 //Resource Group
 resource "azurerm_resource_group" "mtc-rg" {
-  name     = "mtc-resources"
-  location = "Canada Central"
+  name     = local.resource_group_name
+  location = local.location
 }
 
 //storage account 
 resource "azurerm_storage_account" "demo-sta" {
-  name                          = "demostorage32444"
-  resource_group_name           = "mtc-resources"
-  location                      = "Canada Central"
+  name                          = var.storage_account_name
+  resource_group_name           = local.resource_group_name
+  location                      = local.location
   account_tier                  = "Standard"
   account_replication_type      = "LRS"
   public_network_access_enabled = true
@@ -38,19 +50,27 @@ resource "azurerm_storage_account" "demo-sta" {
   tags = {
     environment = "dev"
   }
+
+  depends_on = [
+    azurerm_resource_group.mtc-rg
+  ]
 }
 
 //stroage container
 resource "azurerm_storage_container" "test-container" {
   name                  = "mt32444"
-  storage_account_name  = "demostorage32444"
+  storage_account_name  = var.storage_account_name
   container_access_type = "blob"
+
+  depends_on = [
+    azurerm_storage_account.demo-sta
+  ]
 }
 
 //this is used to upload a local file on the container
 resource "azurerm_storage_blob" "sample" {
   name                   = "bkashDevOps.txt"
-  storage_account_name   = "demostorage32444"
+  storage_account_name   = var.storage_account_name
   storage_container_name = "mt32444"
   type                   = "Block"
   source                 = "C:/Users/USER/OneDrive/Documents/bkashDevOps.txt"
