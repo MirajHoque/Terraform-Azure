@@ -54,4 +54,10 @@ resource "azurerm_storage_blob" "sample" {
   storage_container_name = "mt32444"
   type                   = "Block"
   source                 = "C:/Users/USER/OneDrive/Documents/bkashDevOps.txt"
+
+  //Manage dependencies
+  depends_on = [
+    azurerm_storage_container.test-container
+    //resourceType.ResourceName
+  ]
 }
