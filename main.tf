@@ -20,12 +20,6 @@ provider "azurerm" {
   }
 }
 
-//variable
-variable "storage_account_name" {
-  type        = string
-  description = "Please enter the storage account name"
-}
-
 //locals: local variable that will only be used current terraform configuration file
 locals {
   resource_group_name = "mtc-resource"
@@ -33,51 +27,25 @@ locals {
 }
 
 //Resource Group
-resource "azurerm_resource_group" "mtc-rg" {
+resource "azurerm_resource_group" "mtc_rg" {
   name     = local.resource_group_name
   location = local.location
 }
+//vnet
+resource "azurerm_virtual_network" "app_network" {
+  name                = "app-network"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  address_space       = ["10.0.0.0/16"]
+  dns_servers         = ["10.0.0.4", "10.0.0.5"]
 
-//storage account 
-resource "azurerm_storage_account" "demo-sta" {
-  name                          = var.storage_account_name
-  resource_group_name           = local.resource_group_name
-  location                      = local.location
-  account_tier                  = "Standard"
-  account_replication_type      = "LRS"
-  public_network_access_enabled = true
-
-  tags = {
-    environment = "dev"
+  //subnet
+  subnet {
+    name           = "subnetA"
+    address_prefix = "10.0.1.0/24"
   }
 
-  depends_on = [
-    azurerm_resource_group.mtc-rg
-  ]
-}
-
-//stroage container
-resource "azurerm_storage_container" "test-container" {
-  name                  = "mt32444"
-  storage_account_name  = var.storage_account_name
-  container_access_type = "blob"
-
-  depends_on = [
-    azurerm_storage_account.demo-sta
-  ]
-}
-
-//this is used to upload a local file on the container
-resource "azurerm_storage_blob" "sample" {
-  name                   = "bkashDevOps.txt"
-  storage_account_name   = var.storage_account_name
-  storage_container_name = "mt32444"
-  type                   = "Block"
-  source                 = "C:/Users/USER/OneDrive/Documents/bkashDevOps.txt"
-
-  //Manage dependencies
-  depends_on = [
-    azurerm_storage_container.test-container
-    //resourceType.ResourceName
-  ]
+  tags = {
+    environment = "Production"
+  }
 }
