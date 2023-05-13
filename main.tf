@@ -26,6 +26,13 @@ locals {
   location            = "Canada Central"
 }
 
+//data block: used to get information about existing resource
+data "azurerm_subnet" "subnetA" {
+  name                 = "subnetA"
+  virtual_network_name = "app-network"
+  resource_group_name  = local.resource_group_name
+}
+
 //Resource Group
 resource "azurerm_resource_group" "mtc_rg" {
   name     = local.resource_group_name
@@ -48,4 +55,52 @@ resource "azurerm_virtual_network" "app_network" {
   tags = {
     environment = "Production"
   }
+}
+
+//Network interface
+resource "azurerm_network_interface" "app_nic" {
+  name                = "app-nic"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = data.azurerm_subnet.subnetA.id
+    private_ip_address_allocation = "Dynamic" //comes from the subnet within vnet
+  }
+
+  depends_on = [
+    azurerm_virtual_network.app_network
+  ]
+}
+
+//virtual machine
+resource "azurerm_windows_virtual_machine" "app_vm" {
+  name                = "app-vm"
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  location            = azurerm_resource_group.mtc_rg.location
+  size                = "Standard_F2"
+  admin_username      = "adminuser"
+  admin_password      = "P@$$w0rd1234!"
+  network_interface_ids = [
+    azurerm_network_interface.app_nic.id,
+  ]
+
+  //os disk
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  //os image
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2019-Datacenter"
+    version   = "latest"
+  }
+
+  depends_on = [
+    azurerm_network_interface.app_nic
+  ]
 }
