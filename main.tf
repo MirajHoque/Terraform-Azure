@@ -31,6 +31,10 @@ data "azurerm_subnet" "subnetA" {
   name                 = "subnetA"
   virtual_network_name = "app-network"
   resource_group_name  = local.resource_group_name
+
+  depends_on = [
+    azurerm_virtual_network.app_network
+  ]
 }
 
 //Resource Group
@@ -67,10 +71,12 @@ resource "azurerm_network_interface" "app_nic" {
     name                          = "internal"
     subnet_id                     = data.azurerm_subnet.subnetA.id
     private_ip_address_allocation = "Dynamic" //comes from the subnet within vnet
+    public_ip_address_id          = azurerm_public_ip.app_public_ip.id
   }
 
   depends_on = [
-    azurerm_virtual_network.app_network
+    azurerm_virtual_network.app_network,
+    azurerm_public_ip.app_public_ip
   ]
 }
 
@@ -103,4 +109,17 @@ resource "azurerm_windows_virtual_machine" "app_vm" {
   depends_on = [
     azurerm_network_interface.app_nic
   ]
+}
+
+//public ip address
+resource "azurerm_public_ip" "app_public_ip" {
+  name                    = "app-public-ip"
+  location                = azurerm_resource_group.mtc_rg.location
+  resource_group_name     = azurerm_resource_group.mtc_rg.name
+  allocation_method       = "Static"
+  idle_timeout_in_minutes = 30
+
+  tags = {
+    environment = "test"
+  }
 }
