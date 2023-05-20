@@ -123,3 +123,30 @@ resource "azurerm_public_ip" "app_public_ip" {
     environment = "test"
   }
 }
+
+//Managed Disk:
+resource "azurerm_managed_disk" "data_disk" {
+  name                 = "data-disk"
+  location             = local.location
+  resource_group_name  = local.resource_group_name
+  storage_account_type = "Standard_LRS"
+  create_option        = "Empty"
+  disk_size_gb         = "1"
+
+  tags = {
+    environment = "staging"
+  }
+}
+
+//Attached disk to an existing vm
+resource "azurerm_virtual_machine_data_disk_attachment" "disk_attach" {
+  managed_disk_id    = azurerm_managed_disk.data_disk.id
+  virtual_machine_id = azurerm_windows_virtual_machine.app_vm.id
+  lun                = "0"
+  caching            = "ReadWrite"
+
+  depends_on = [
+    azurerm_windows_virtual_machine.app_vm,
+    azurerm_managed_disk.data_disk
+  ]
+}
