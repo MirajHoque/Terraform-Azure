@@ -136,9 +136,9 @@ resource "azurerm_managed_disk" "data_disk" {
   create_option        = "Empty"
   disk_size_gb         = "1"
 
-  depends_on = [ 
+  depends_on = [
     azurerm_windows_virtual_machine.app_vm
-   ]
+  ]
 
   tags = {
     environment = "staging"
@@ -169,6 +169,69 @@ resource "azurerm_availability_set" "app_set" {
   depends_on = [
     azurerm_resource_group.mtc_rg
   ]
+
+  tags = {
+    environment = "Production"
+  }
+}
+
+//storage account
+resource "azurerm_storage_account" "app_str" {
+  name                          = "appstr"
+  resource_group_name           = azurerm_resource_group.mtc_rg.name
+  location                      = azurerm_resource_group.mtc_rg.location
+  account_tier                  = "Standard"
+  account_replication_type      = "LRS"
+  public_network_access_enabled = true
+
+  tags = {
+    environment = "staging"
+  }
+}
+
+#storage container
+resource "azurerm_storage_container" "data" {
+  name                  = "data"
+  storage_account_name  = azurerm_storage_account.app_str.name
+  container_access_type = "blob"
+
+  depends_on = [
+    azurerm_storage_account.app_str
+  ]
+}
+
+#uploading ISS configuration script as blob into azure storage container
+resource "azurerm_storage_blob" "IIS_config" {
+  name                   = "iis-config.ps1"
+  storage_account_name   = azurerm_storage_account.app_str.name
+  storage_container_name = azurerm_storage_container.data.name
+  type                   = "Block"
+  source                 = "C:/Users/USER/OneDrive/Documents/IIS_Config.ps1"
+
+  depends_on = [
+    azurerm_storage_container.data
+  ]
+}
+
+#add vm extension
+resource "azurerm_virtual_machine_extension" "vm_extension" {
+  name                 = "appvm-extension"
+  virtual_machine_id   = azurerm_windows_virtual_machine.app_vm.id
+  publisher            = "Microsoft.Compute"
+  type                 = "CustomScript"
+  type_handler_version = "2.0"
+
+  depends_on = [
+    azurerm_storage_blob.IIS_config
+  ]
+
+  settings = <<SETTINGS
+ {
+  "fileUris": ["https://${azurerm_storage_account.app_str.name}.blob.core.windows.net/data/IIS_config.ps1"],
+  "commandToExecute": "Powershell -ExecutionPolicy Unrestricted -file iis-config.ps1"
+ }
+SETTINGS
+
 
   tags = {
     environment = "Production"
