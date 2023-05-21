@@ -26,16 +26,6 @@ locals {
   location            = "Canada Central"
 }
 
-//data block: used to get information about existing resource
-data "azurerm_subnet" "subnetA" {
-  name                 = "subnetA"
-  virtual_network_name = "app-network"
-  resource_group_name  = local.resource_group_name
-
-  depends_on = [
-    azurerm_virtual_network.app_network
-  ]
-}
 
 //Resource Group
 resource "azurerm_resource_group" "mtc_rg" {
@@ -50,15 +40,25 @@ resource "azurerm_virtual_network" "app_network" {
   address_space       = ["10.0.0.0/16"]
   dns_servers         = ["10.0.0.4", "10.0.0.5"]
 
-  //subnet
-  subnet {
-    name           = "subnetA"
-    address_prefix = "10.0.1.0/24"
-  }
+  depends_on = [
+    azurerm_resource_group.mtc_rg
+  ]
 
   tags = {
     environment = "Production"
   }
+}
+
+//subnet
+resource "azurerm_subnet" "subnetA" {
+  name                 = "subnet-A"
+  resource_group_name  = local.resource_group_name
+  virtual_network_name = azurerm_virtual_network.app_network.name
+  address_prefixes     = ["10.0.1.0/24"]
+
+  depends_on = [
+    azurerm_virtual_network.app_network
+  ]
 }
 
 //Network interface
@@ -69,14 +69,15 @@ resource "azurerm_network_interface" "app_nic" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = data.azurerm_subnet.subnetA.id
+    subnet_id                     = azurerm_subnet.subnetA.id
     private_ip_address_allocation = "Dynamic" //comes from the subnet within vnet
     public_ip_address_id          = azurerm_public_ip.app_public_ip.id
   }
 
   depends_on = [
     azurerm_virtual_network.app_network,
-    azurerm_public_ip.app_public_ip
+    azurerm_public_ip.app_public_ip,
+    azurerm_subnet.subnetA
   ]
 }
 
@@ -88,6 +89,7 @@ resource "azurerm_windows_virtual_machine" "app_vm" {
   size                = "Standard_F2"
   admin_username      = "adminuser"
   admin_password      = "P@$$w0rd1234!"
+  availability_set_id = azurerm_availability_set.app_set.id
   network_interface_ids = [
     azurerm_network_interface.app_nic.id,
   ]
@@ -107,7 +109,8 @@ resource "azurerm_windows_virtual_machine" "app_vm" {
   }
 
   depends_on = [
-    azurerm_network_interface.app_nic
+    azurerm_network_interface.app_nic,
+    azurerm_availability_set.app_set
   ]
 }
 
@@ -133,6 +136,10 @@ resource "azurerm_managed_disk" "data_disk" {
   create_option        = "Empty"
   disk_size_gb         = "1"
 
+  depends_on = [ 
+    azurerm_windows_virtual_machine.app_vm
+   ]
+
   tags = {
     environment = "staging"
   }
@@ -149,4 +156,21 @@ resource "azurerm_virtual_machine_data_disk_attachment" "disk_attach" {
     azurerm_windows_virtual_machine.app_vm,
     azurerm_managed_disk.data_disk
   ]
+}
+
+//availability set
+resource "azurerm_availability_set" "app_set" {
+  name                         = "app-set"
+  location                     = local.location
+  resource_group_name          = local.resource_group_name
+  platform_fault_domain_count  = 3
+  platform_update_domain_count = 3
+
+  depends_on = [
+    azurerm_resource_group.mtc_rg
+  ]
+
+  tags = {
+    environment = "Production"
+  }
 }
