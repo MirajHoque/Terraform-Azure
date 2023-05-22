@@ -202,7 +202,7 @@ resource "azurerm_storage_container" "data" {
 
 #uploading ISS configuration script as blob into azure storage container
 resource "azurerm_storage_blob" "IIS_config" {
-  name                   = "iis-config.ps1"
+  name                   = "iis_config.ps1"
   storage_account_name   = azurerm_storage_account.app_str.name
   storage_container_name = azurerm_storage_container.data.name
   type                   = "Block"
@@ -214,26 +214,65 @@ resource "azurerm_storage_blob" "IIS_config" {
 }
 
 #add vm extension
-resource "azurerm_virtual_machine_extension" "vm_extension" {
-  name                 = "appvm-extension"
-  virtual_machine_id   = azurerm_windows_virtual_machine.app_vm.id
-  publisher            = "Microsoft.Compute"
-  type                 = "CustomScript"
-  type_handler_version = "2.0"
+
+# resource "azurerm_virtual_machine_extension" "vm_extension" {
+#   name                       = "appvm-extension"
+#   virtual_machine_id         = azurerm_windows_virtual_machine.app_vm.id
+#   publisher                  = "Microsoft.Compute"
+#   type                       = "CustomScriptExtension"
+#   type_handler_version       = "1.10"
+#   auto_upgrade_minor_version = true
+
+#   depends_on = [
+#     azurerm_storage_blob.IIS_config
+#   ]
+
+#   settings = <<SETTINGS
+#  {
+#   "fileUris": ["https://${azurerm_storage_account.app_str.name}.blob.core.windows.net/data/iis_config.ps1"],
+#   "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file iis_config.ps1"
+#  }
+# SETTINGS
+
+
+#   tags = {
+#     environment = "Production"
+#   }
+# }
+
+#network security group
+resource "azurerm_network_security_group" "app_nsg" {
+  name                = "app-network"
+  location            = local.location
+  resource_group_name = local.resource_group_name
+
+  security_rule {
+    name                       = "AllowHttp"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 
   depends_on = [
-    azurerm_storage_blob.IIS_config
+    azurerm_resource_group.mtc_rg
   ]
-
-  settings = <<SETTINGS
- {
-  "fileUris": ["https://${azurerm_storage_account.app_str.name}.blob.core.windows.net/data/IIS_config.ps1"],
-  "commandToExecute": "Powershell -ExecutionPolicy Unrestricted -file iis-config.ps1"
- }
-SETTINGS
-
 
   tags = {
     environment = "Production"
   }
+}
+
+#add subnet to the nsg
+resource "azurerm_subnet_network_security_group_association" "example" {
+  subnet_id                 = azurerm_subnet.subnetA.id
+  network_security_group_id = azurerm_network_security_group.app_nsg.id
+
+  depends_on = [
+    azurerm_network_security_group.app_nsg
+  ]
 }
