@@ -26,12 +26,18 @@ locals {
   location            = "Canada Central"
 }
 
+#data: grave information about current config
+data "azurerm_client_config" "current" {
+
+}
+
 
 //Resource Group
 resource "azurerm_resource_group" "mtc_rg" {
   name     = local.resource_group_name
   location = local.location
 }
+
 //vnet
 resource "azurerm_virtual_network" "app_network" {
   name                = "app-network"
@@ -88,8 +94,7 @@ resource "azurerm_windows_virtual_machine" "app_vm" {
   location            = azurerm_resource_group.mtc_rg.location
   size                = "Standard_F2"
   admin_username      = "adminuser"
-  admin_password      = "P@$$w0rd1234!"
-  availability_set_id = azurerm_availability_set.app_set.id
+  admin_password      = azurerm_key_vault_secret.vm_password.value
   network_interface_ids = [
     azurerm_network_interface.app_nic.id,
   ]
@@ -110,7 +115,7 @@ resource "azurerm_windows_virtual_machine" "app_vm" {
 
   depends_on = [
     azurerm_network_interface.app_nic,
-    azurerm_availability_set.app_set
+    azurerm_key_vault_secret.vm_password
   ]
 }
 
@@ -127,152 +132,48 @@ resource "azurerm_public_ip" "app_public_ip" {
   }
 }
 
-//Managed Disk:
-resource "azurerm_managed_disk" "data_disk" {
-  name                 = "data-disk"
-  location             = local.location
-  resource_group_name  = local.resource_group_name
-  storage_account_type = "Standard_LRS"
-  create_option        = "Empty"
-  disk_size_gb         = "1"
 
-  depends_on = [
-    azurerm_windows_virtual_machine.app_vm
-  ]
+#Key vault
+resource "azurerm_key_vault" "app_kv" {
+  name                       = "app-kv32444"
+  location                   = azurerm_resource_group.mtc_rg.location
+  resource_group_name        = azurerm_resource_group.mtc_rg.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
 
-  tags = {
-    environment = "staging"
-  }
-}
+  sku_name = "standard"
 
-//Attached disk to an existing vm
-resource "azurerm_virtual_machine_data_disk_attachment" "disk_attach" {
-  managed_disk_id    = azurerm_managed_disk.data_disk.id
-  virtual_machine_id = azurerm_windows_virtual_machine.app_vm.id
-  lun                = "0"
-  caching            = "ReadWrite"
+  access_policy {
+    tenant_id = data.azurerm_client_config.current.tenant_id
+    object_id = data.azurerm_client_config.current.object_id
 
-  depends_on = [
-    azurerm_windows_virtual_machine.app_vm,
-    azurerm_managed_disk.data_disk
-  ]
-}
+    key_permissions = [
+      "Get",
+    ]
 
-//availability set
-resource "azurerm_availability_set" "app_set" {
-  name                         = "app-set"
-  location                     = local.location
-  resource_group_name          = local.resource_group_name
-  platform_fault_domain_count  = 3
-  platform_update_domain_count = 3
+    secret_permissions = [
+      "Get", "Backup", "Delete", "List", "Purge", "Recover", "Restore", "Set"
+    ]
 
-  depends_on = [
-    azurerm_resource_group.mtc_rg
-  ]
-
-  tags = {
-    environment = "Production"
-  }
-}
-
-//storage account
-resource "azurerm_storage_account" "app_str" {
-  name                          = "appstr"
-  resource_group_name           = azurerm_resource_group.mtc_rg.name
-  location                      = azurerm_resource_group.mtc_rg.location
-  account_tier                  = "Standard"
-  account_replication_type      = "LRS"
-  public_network_access_enabled = true
-
-  tags = {
-    environment = "staging"
-  }
-}
-
-#storage container
-resource "azurerm_storage_container" "data" {
-  name                  = "data"
-  storage_account_name  = azurerm_storage_account.app_str.name
-  container_access_type = "blob"
-
-  depends_on = [
-    azurerm_storage_account.app_str
-  ]
-}
-
-#uploading ISS configuration script as blob into azure storage container
-resource "azurerm_storage_blob" "IIS_config" {
-  name                   = "iis_config.ps1"
-  storage_account_name   = azurerm_storage_account.app_str.name
-  storage_container_name = azurerm_storage_container.data.name
-  type                   = "Block"
-  source                 = "C:/Users/USER/OneDrive/Documents/IIS_Config.ps1"
-
-  depends_on = [
-    azurerm_storage_container.data
-  ]
-}
-
-#add vm extension
-
-# resource "azurerm_virtual_machine_extension" "vm_extension" {
-#   name                       = "appvm-extension"
-#   virtual_machine_id         = azurerm_windows_virtual_machine.app_vm.id
-#   publisher                  = "Microsoft.Compute"
-#   type                       = "CustomScriptExtension"
-#   type_handler_version       = "1.10"
-#   auto_upgrade_minor_version = true
-
-#   depends_on = [
-#     azurerm_storage_blob.IIS_config
-#   ]
-
-#   settings = <<SETTINGS
-#  {
-#   "fileUris": ["https://${azurerm_storage_account.app_str.name}.blob.core.windows.net/data/iis_config.ps1"],
-#   "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file iis_config.ps1"
-#  }
-# SETTINGS
-
-
-#   tags = {
-#     environment = "Production"
-#   }
-# }
-
-#network security group
-resource "azurerm_network_security_group" "app_nsg" {
-  name                = "app-network"
-  location            = local.location
-  resource_group_name = local.resource_group_name
-
-  security_rule {
-    name                       = "AllowHttp"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+    storage_permissions = [
+      "Get",
+    ]
   }
 
   depends_on = [
     azurerm_resource_group.mtc_rg
   ]
 
-  tags = {
-    environment = "Production"
-  }
 }
 
-#add subnet to the nsg
-resource "azurerm_subnet_network_security_group_association" "example" {
-  subnet_id                 = azurerm_subnet.subnetA.id
-  network_security_group_id = azurerm_network_security_group.app_nsg.id
+#kev valut secret
+resource "azurerm_key_vault_secret" "vm_password" {
+  name         = "vm-password"
+  value        = "azure@123"
+  key_vault_id = azurerm_key_vault.app_kv.id
 
   depends_on = [
-    azurerm_network_security_group.app_nsg
+    azurerm_key_vault.app_kv
   ]
 }
