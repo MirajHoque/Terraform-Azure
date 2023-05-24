@@ -20,25 +20,19 @@ provider "azurerm" {
   }
 }
 
-//locals: local variable that will only be used current terraform configuration file
+#locals: local variable that will only be used current terraform configuration file
 locals {
   resource_group_name = "mtc-resource"
   location            = "Canada Central"
 }
 
-#data: grave information about current config
-data "azurerm_client_config" "current" {
-
-}
-
-
-//Resource Group
+#Resource Group
 resource "azurerm_resource_group" "mtc_rg" {
   name     = local.resource_group_name
   location = local.location
 }
 
-//vnet
+#vnet
 resource "azurerm_virtual_network" "app_network" {
   name                = "app-network"
   location            = local.location
@@ -55,7 +49,7 @@ resource "azurerm_virtual_network" "app_network" {
   }
 }
 
-//subnet
+#subnet
 resource "azurerm_subnet" "subnetA" {
   name                 = "subnet-A"
   resource_group_name  = local.resource_group_name
@@ -67,7 +61,7 @@ resource "azurerm_subnet" "subnetA" {
   ]
 }
 
-//Network interface
+#Network interface
 resource "azurerm_network_interface" "app_nic" {
   name                = "app-nic"
   location            = local.location
@@ -87,39 +81,37 @@ resource "azurerm_network_interface" "app_nic" {
   ]
 }
 
-//virtual machine
-resource "azurerm_windows_virtual_machine" "app_vm" {
-  name                = "app-vm"
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-  location            = azurerm_resource_group.mtc_rg.location
-  size                = "Standard_F2"
-  admin_username      = "adminuser"
-  admin_password      = azurerm_key_vault_secret.vm_password.value
+#virtual machine - Linux
+resource "azurerm_linux_virtual_machine" "app_vm" {
+  name                            = "app-vm"
+  resource_group_name             = azurerm_resource_group.mtc_rg.name
+  location                        = azurerm_resource_group.mtc_rg.location
+  size                            = "Standard_F2"
+  admin_username                  = "adminuser"
+  admin_password                  = "azure@123"
+  disable_password_authentication = false
+
   network_interface_ids = [
     azurerm_network_interface.app_nic.id,
   ]
-
-  //os disk
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
 
-  //os image
   source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-Datacenter"
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "18.04-LTS"
     version   = "latest"
   }
 
   depends_on = [
-    azurerm_network_interface.app_nic,
-    azurerm_key_vault_secret.vm_password
+    azurerm_network_interface.app_nic
   ]
 }
 
-//public ip address
+#public ip address
 resource "azurerm_public_ip" "app_public_ip" {
   name                    = "app-public-ip"
   location                = azurerm_resource_group.mtc_rg.location
@@ -127,53 +119,11 @@ resource "azurerm_public_ip" "app_public_ip" {
   allocation_method       = "Static"
   idle_timeout_in_minutes = 30
 
-  tags = {
-    environment = "test"
-  }
-}
-
-
-#Key vault
-resource "azurerm_key_vault" "app_kv" {
-  name                       = "app-kv32444"
-  location                   = azurerm_resource_group.mtc_rg.location
-  resource_group_name        = azurerm_resource_group.mtc_rg.name
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  soft_delete_retention_days = 7
-  purge_protection_enabled   = false
-
-  sku_name = "standard"
-
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-
-    key_permissions = [
-      "Get",
-    ]
-
-    secret_permissions = [
-      "Get", "Backup", "Delete", "List", "Purge", "Recover", "Restore", "Set"
-    ]
-
-    storage_permissions = [
-      "Get",
-    ]
-  }
-
   depends_on = [
     azurerm_resource_group.mtc_rg
   ]
 
-}
-
-#kev valut secret
-resource "azurerm_key_vault_secret" "vm_password" {
-  name         = "vm-password"
-  value        = "azure@123"
-  key_vault_id = azurerm_key_vault.app_kv.id
-
-  depends_on = [
-    azurerm_key_vault.app_kv
-  ]
+  tags = {
+    environment = "test"
+  }
 }
