@@ -3,7 +3,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "3.55.0"
+      version = "3.57.0"
     }
   }
 }
@@ -24,6 +24,18 @@ provider "azurerm" {
 locals {
   resource_group_name = "mtc-resource"
   location            = "Canada Central"
+}
+
+#install nginx via cloud init config
+data "template_cloudinit_config" "vm_config" {
+  gzip          = true
+  base64_encode = true
+
+  part {
+    content_type = "text/cloud-config"
+    content      = "packages: ['nginx']"
+  }
+
 }
 
 #Resource Group
@@ -77,7 +89,6 @@ resource "azurerm_network_interface" "app_nic" {
   depends_on = [
     azurerm_virtual_network.app_network,
     azurerm_public_ip.app_public_ip,
-    azurerm_subnet.subnetA
   ]
 }
 
@@ -86,11 +97,11 @@ resource "azurerm_linux_virtual_machine" "app_vm" {
   name                            = "app-vm"
   resource_group_name             = azurerm_resource_group.mtc_rg.name
   location                        = azurerm_resource_group.mtc_rg.location
-  size                            = "Standard_F2"
+  size                            = "Standard_DS1_v2"
   admin_username                  = "adminuser"
   admin_password                  = "azure@123"
   disable_password_authentication = false
-
+  custom_data                     = data.template_cloudinit_config.vm_config.rendered
   network_interface_ids = [
     azurerm_network_interface.app_nic.id,
   ]
