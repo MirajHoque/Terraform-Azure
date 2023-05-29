@@ -32,25 +32,41 @@ resource "azurerm_resource_group" "mtc_rg" {
   location = local.location
 }
 
-#app service plan
-resource "azurerm_app_service_plan" "app_plan" {
-  name                = "app-serviceplan"
-  location            = azurerm_resource_group.mtc_rg.location
-  resource_group_name = azurerm_resource_group.mtc_rg.name
+#sql server
 
-  sku {
-    tier = "Free"
-    size = "F1"
+resource "azurerm_sql_server" "mt_server" {
+  name                         = "mt-sqlserver"
+  resource_group_name          = azurerm_resource_group.mtc_rg.name
+  location                     = azurerm_resource_group.mtc_rg.location
+  version                      = "12.0"
+  administrator_login          = "sqladmin"
+  administrator_login_password = "azure@123"
+  tags = {
+    environment = "production"
   }
 }
 
-#azure web app
+#sql database
+resource "azurerm_sql_database" "mt_db" {
+  name                = "mt-db"
+  resource_group_name = local.resource_group_name
+  location            = local.location
+  server_name         = azurerm_sql_server.mt_server.name
 
-resource "azurerm_app_service" "test_web" {
-  name                = "test-webapp32444"
-  location            = azurerm_resource_group.mtc_rg.location
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-  app_service_plan_id = azurerm_app_service_plan.app_plan.id
-
+  depends_on = [
+    azurerm_sql_server.mt_server
+  ]
 }
 
+#add firewall rule to the sql server
+resource "azurerm_sql_firewall_rule" "mt_server_firewall" {
+  name                = "mt-server-firewall"
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  server_name         = azurerm_sql_server.mt_server.name
+  start_ip_address    = "27.147.172.202"
+  end_ip_address      = "27.147.172.202"
+
+  depends_on = [ 
+    azurerm_sql_server.mt_server
+   ]
+}
