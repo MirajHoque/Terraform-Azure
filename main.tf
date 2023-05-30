@@ -27,115 +27,252 @@ locals {
 }
 
 
-//Resource Group
+#Resource Group
 resource "azurerm_resource_group" "mtc_rg" {
   name     = local.resource_group_name
   location = local.location
 }
-//vnet
-resource "azurerm_virtual_network" "app_network" {
-  name                = "app-network"
-  location            = local.location
+
+#vnet
+
+resource "azurerm_virtual_network" "app_vnet" {
+  name                = "app-vnet"
+  location            = azurerm_resource_group.mtc_rg.location
   resource_group_name = azurerm_resource_group.mtc_rg.name
   address_space       = ["10.0.0.0/16"]
-  dns_servers         = ["10.0.0.4", "10.0.0.5"]
 
-  depends_on = [
+  depends_on = [ 
     azurerm_resource_group.mtc_rg
+   ]
+}
+
+#subnet
+resource "azurerm_subnet" "subnetA" {
+  name                 = "subnetA"
+  resource_group_name  = azurerm_resource_group.mtc_rg.name
+  virtual_network_name = azurerm_virtual_network.app_vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+
+  depends_on = [ 
+    azurerm_virtual_network.app_vnet
+   ]
+}
+
+#Network interface
+resource "azurerm_network_interface" "app_nic1" {
+  name                = "app-nic1"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnetA.id
+    private_ip_address_allocation = "Dynamic"
+  }
+
+  depends_on = [ 
+    azurerm_virtual_network.app_vnet,
+    azurerm_suazurerm_subnet.subnetA
+    ]
+}
+
+resource "azurerm_network_interface" "app_nic2" {
+  name                = "app-nic2"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnetA.id
+    private_ip_address_allocation = "Dynamic"
+  }
+
+  depends_on = [ 
+    azurerm_virtual_network.app_vnet,
+    azurerm_suazurerm_subnet.subnetA
+    ]
+}
+
+#windows vm
+resource "azurerm_windows_virtual_machine" "app_vm1" {
+  name                = "app-vm1"
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  location            = azurerm_resource_group.mtc_rg.location
+  size                = "Standard_B1ls"
+  admin_username      = "adminuser"
+  admin_password      = "P@$$w0rd1234!"
+  availability_set_id = azurerm_availability_set.app_aset.id
+
+  network_interface_ids = [
+    azurerm_network_interface.app_nic1.id,
   ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2016-Datacenter"
+    version   = "latest"
+  }
+
+  depends_on = [ 
+    azurerm_network_interface.app_nic1,
+    azurerm_availability_set.app_aset
+   ]
+}
+
+resource "azurerm_windows_virtual_machine" "app_vm2" {
+  name                = "app-vm2"
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  location            = azurerm_resource_group.mtc_rg.location
+  size                = "Standard_B1ls"
+  admin_username      = "adminuser"
+  admin_password      = "P@$$w0rd1234!"
+  availability_set_id = azurerm_availability_set.app_aset.id
+
+  network_interface_ids = [
+    azurerm_network_interface.app_nic2.id,
+  ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2016-Datacenter"
+    version   = "latest"
+  }
+
+  depends_on = [ 
+    azurerm_network_interface.app_nic2,
+    azurerm_availability_set.app_aset
+   ]
+}
+
+#availability set
+resource "azurerm_availability_set" "app_aset" {
+  name                = "app-aset"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  platform_fault_domain_count = 3
+  platform_update_domain_count = 3
+
+  depends_on = [ 
+    azurerm_resource_group.mtc_rg
+   ]
 
   tags = {
     environment = "Production"
   }
 }
 
-//subnet
-resource "azurerm_subnet" "subnetA" {
-  name                 = "subnet-A"
-  resource_group_name  = local.resource_group_name
-  virtual_network_name = azurerm_virtual_network.app_network.name
-  address_prefixes     = ["10.0.1.0/24"]
+#storage account
+resource "azurerm_storage_account" "mt_storageac" {
+  name                     = "mt-storaccount"
+  resource_group_name      = azurerm_resource_group.mtc_rg.name
+  location                 = azurerm_resource_group.mtc_rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  public_network_access_enabled = true
 
-  depends_on = [
-    azurerm_virtual_network.app_network
-  ]
-}
-
-#Subnet for Bastion
-resource "azurerm_subnet" "Azure_Bastion_Subnet" {
-  name                 = "AzureBastionSubnet"
-  resource_group_name  = local.resource_group_name
-  virtual_network_name = azurerm_virtual_network.app_network.name
-  address_prefixes     = ["10.0.2.0/24"]
-
-  depends_on = [
-    azurerm_virtual_network.app_network
-  ]
-}
-
-
-//Network interface
-resource "azurerm_network_interface" "app_nic" {
-  name                = "app-nic"
-  location            = local.location
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.subnetA.id
-    private_ip_address_allocation = "Dynamic" //comes from the subnet within vnet
-    public_ip_address_id          = azurerm_public_ip.app_public_ip.id
+  tags = {
+    environment = "staging"
   }
 
-  depends_on = [
-    azurerm_virtual_network.app_network,
-    azurerm_public_ip.app_public_ip,
-    azurerm_subnet.subnetA
-  ]
+  depends_on = [ 
+    azurerm_resource_group.mtc_rg
+   ]
 }
 
-//virtual machine
-resource "azurerm_windows_virtual_machine" "app_vm" {
-  name                = "app-vm"
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-  location            = azurerm_resource_group.mtc_rg.location
-  size                = "Standard_F2"
-  admin_username      = "adminuser"
-  admin_password      = "P@$$w0rd1234!"
-  availability_set_id = azurerm_availability_set.app_set.id
-  network_interface_ids = [
-    azurerm_network_interface.app_nic.id,
-  ]
+#storage container
+resource "azurerm_storage_container" "mt_container" {
+  name                  = "mtc"
+  storage_account_name  = azurerm_storage_account.mt_storageac.name
+  container_access_type = "blob"
 
-  //os disk
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  //os image
-  source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-Datacenter"
-    version   = "latest"
-  }
-
-  depends_on = [
-    azurerm_network_interface.app_nic,
-    azurerm_availability_set.app_set
-  ]
+  depends_on = [ 
+    azurerm_storage_account.mt_storageac
+   ]
 }
 
-#network security group
+#add data to the container
+resource "azurerm_storage_blob" "IIS_config" {
+  name                   = "IIS_config.ps1"
+  storage_account_name   = azurerm_storage_account.mt_storageac.name
+  storage_container_name = azurerm_storage_container.mt_container.name
+  type                   = "Block"
+  source                 = "C:/Users/USER/OneDrive/Documents/IIS_config.ps1"
+
+  depends_on = [ 
+    azurerm_storage_container.mt_container
+   ]
+}
+
+#vm extension
+resource "azurerm_virtual_machine_extension" "vm_extension1" {
+  name                 = "vm-extension1"
+  virtual_machine_id   = azurerm_windows_virtual_machine.app_vm1.id
+  publisher            = "Microsoft.Compute"
+  type                 = "CustomScriptExtension"
+  type_handler_version = "1.10"
+
+  depends_on = [ 
+    azurerm_storage_blob.IIS_config
+   ]
+
+  settings = <<SETTINGS
+ {
+  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_Config.ps1"],
+  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_Config.ps1"   
+ }
+SETTINGS
+
+
+  tags = {
+    environment = "Production"
+  }
+}
+
+resource "azurerm_virtual_machine_extension" "vm_extension2" {
+  name                 = "vm-extension2"
+  virtual_machine_id   = azurerm_windows_virtual_machine.app_vm2.id
+  publisher            = "Microsoft.Compute"
+  type                 = "CustomScriptExtension"
+  type_handler_version = "1.10"
+
+  depends_on = [ 
+    azurerm_storage_blob.IIS_config
+   ]
+
+  settings = <<SETTINGS
+ {
+  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_Config.ps1"],
+  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_Config.ps1"   
+ }
+SETTINGS
+
+
+  tags = {
+    environment = "Production"
+  }
+}
+
+#nsg
 resource "azurerm_network_security_group" "app_nsg" {
-  name                = "app-network"
-  location            = local.location
-  resource_group_name = local.resource_group_name
+  name                = "app-nsg"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
 
   security_rule {
-    name                       = "AllowHttp"
-    priority                   = 100
+    name                       = "Allow_HTTP"
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -145,48 +282,17 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
-  depends_on = [
-    azurerm_resource_group.mtc_rg
-  ]
-
   tags = {
     environment = "Production"
   }
 }
 
-#add subnet to the nsg
+#nsg association
 resource "azurerm_subnet_network_security_group_association" "nsg_association" {
   subnet_id                 = azurerm_subnet.subnetA.id
   network_security_group_id = azurerm_network_security_group.app_nsg.id
 
-  depends_on = [
+  depends_on = [ 
     azurerm_network_security_group.app_nsg
-  ]
+   ]
 }
-
-#public ip address
-resource "azurerm_public_ip" "bastion_public_ip" {
-  name                    = "bastion-public-ip"
-  location                = azurerm_resource_group.mtc_rg.location
-  resource_group_name     = azurerm_resource_group.mtc_rg.name
-  allocation_method       = "Static"
-  idle_timeout_in_minutes = 30
-
-  tags = {
-    environment = "test"
-  }
-}
-
-#bastion host
-resource "azurerm_bastion_host" "app_bastion" {
-  name                = "app-bastion"
-  location            = azurerm_resource_group.mtc_rg.location
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-
-  ip_configuration {
-    name                 = "bastion-configuration"
-    subnet_id            = azurerm_subnet.Azure_Bastion_Subnet.id
-    public_ip_address_id = azurerm_public_ip.bastion_public_ip.id
-  }
-}
-
