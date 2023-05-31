@@ -10,10 +10,10 @@ terraform {
 
 //Add cloud provider 
 provider "azurerm" {
-  subscription_id = "d8026e85-c3a9-4a33-acb5-88d88c4daf6c"
-  client_id       = "a34d4f82-4be8-4e70-8ecf-2ec7650f1f16"
-  client_secret   = "K_G8Q~5CuEX7CHBJ57xaxvGmQJzqdvqWWqo~vb_w"
-  tenant_id       = "cec0703b-aa1e-474f-a0b6-774a05568b47"
+  subscription_id = ""
+  client_id       = ""
+  client_secret   = ""
+  tenant_id       = ""
   #required
   features {
     //optional
@@ -41,9 +41,9 @@ resource "azurerm_virtual_network" "app_vnet" {
   resource_group_name = azurerm_resource_group.mtc_rg.name
   address_space       = ["10.0.0.0/16"]
 
-  depends_on = [ 
+  depends_on = [
     azurerm_resource_group.mtc_rg
-   ]
+  ]
 }
 
 #subnet
@@ -53,9 +53,9 @@ resource "azurerm_subnet" "subnetA" {
   virtual_network_name = azurerm_virtual_network.app_vnet.name
   address_prefixes     = ["10.0.1.0/24"]
 
-  depends_on = [ 
+  depends_on = [
     azurerm_virtual_network.app_vnet
-   ]
+  ]
 }
 
 #Network interface
@@ -70,10 +70,10 @@ resource "azurerm_network_interface" "app_nic1" {
     private_ip_address_allocation = "Dynamic"
   }
 
-  depends_on = [ 
+  depends_on = [
     azurerm_virtual_network.app_vnet,
-    azurerm_suazurerm_subnet.subnetA
-    ]
+    azurerm_subnet.subnetA
+  ]
 }
 
 resource "azurerm_network_interface" "app_nic2" {
@@ -87,10 +87,10 @@ resource "azurerm_network_interface" "app_nic2" {
     private_ip_address_allocation = "Dynamic"
   }
 
-  depends_on = [ 
+  depends_on = [
     azurerm_virtual_network.app_vnet,
-    azurerm_suazurerm_subnet.subnetA
-    ]
+    azurerm_subnet.subnetA
+  ]
 }
 
 #windows vm
@@ -119,10 +119,10 @@ resource "azurerm_windows_virtual_machine" "app_vm1" {
     version   = "latest"
   }
 
-  depends_on = [ 
+  depends_on = [
     azurerm_network_interface.app_nic1,
     azurerm_availability_set.app_aset
-   ]
+  ]
 }
 
 resource "azurerm_windows_virtual_machine" "app_vm2" {
@@ -150,23 +150,23 @@ resource "azurerm_windows_virtual_machine" "app_vm2" {
     version   = "latest"
   }
 
-  depends_on = [ 
+  depends_on = [
     azurerm_network_interface.app_nic2,
     azurerm_availability_set.app_aset
-   ]
+  ]
 }
 
 #availability set
 resource "azurerm_availability_set" "app_aset" {
-  name                = "app-aset"
-  location            = azurerm_resource_group.mtc_rg.location
-  resource_group_name = azurerm_resource_group.mtc_rg.name
-  platform_fault_domain_count = 3
+  name                         = "app-aset"
+  location                     = azurerm_resource_group.mtc_rg.location
+  resource_group_name          = azurerm_resource_group.mtc_rg.name
+  platform_fault_domain_count  = 3
   platform_update_domain_count = 3
 
-  depends_on = [ 
+  depends_on = [
     azurerm_resource_group.mtc_rg
-   ]
+  ]
 
   tags = {
     environment = "Production"
@@ -175,20 +175,20 @@ resource "azurerm_availability_set" "app_aset" {
 
 #storage account
 resource "azurerm_storage_account" "mt_storageac" {
-  name                     = "mt-storaccount"
-  resource_group_name      = azurerm_resource_group.mtc_rg.name
-  location                 = azurerm_resource_group.mtc_rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+  name                          = "mtstoraccount"
+  resource_group_name           = azurerm_resource_group.mtc_rg.name
+  location                      = azurerm_resource_group.mtc_rg.location
+  account_tier                  = "Standard"
+  account_replication_type      = "LRS"
   public_network_access_enabled = true
 
   tags = {
     environment = "staging"
   }
 
-  depends_on = [ 
+  depends_on = [
     azurerm_resource_group.mtc_rg
-   ]
+  ]
 }
 
 #storage container
@@ -197,9 +197,9 @@ resource "azurerm_storage_container" "mt_container" {
   storage_account_name  = azurerm_storage_account.mt_storageac.name
   container_access_type = "blob"
 
-  depends_on = [ 
+  depends_on = [
     azurerm_storage_account.mt_storageac
-   ]
+  ]
 }
 
 #add data to the container
@@ -210,9 +210,9 @@ resource "azurerm_storage_blob" "IIS_config" {
   type                   = "Block"
   source                 = "C:/Users/USER/OneDrive/Documents/IIS_config.ps1"
 
-  depends_on = [ 
+  depends_on = [
     azurerm_storage_container.mt_container
-   ]
+  ]
 }
 
 #vm extension
@@ -223,14 +223,14 @@ resource "azurerm_virtual_machine_extension" "vm_extension1" {
   type                 = "CustomScriptExtension"
   type_handler_version = "1.10"
 
-  depends_on = [ 
+  depends_on = [
     azurerm_storage_blob.IIS_config
-   ]
+  ]
 
   settings = <<SETTINGS
  {
-  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_Config.ps1"],
-  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_Config.ps1"   
+  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_config.ps1"],
+  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_config.ps1"   
  }
 SETTINGS
 
@@ -247,14 +247,14 @@ resource "azurerm_virtual_machine_extension" "vm_extension2" {
   type                 = "CustomScriptExtension"
   type_handler_version = "1.10"
 
-  depends_on = [ 
+  depends_on = [
     azurerm_storage_blob.IIS_config
-   ]
+  ]
 
   settings = <<SETTINGS
  {
-  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_Config.ps1"],
-  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_Config.ps1"   
+  "fileUris": ["https://${azurerm_storage_account.mt_storageac.name}.blob.core.windows.net/mtc/IIS_config.ps1"],
+  "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file IIS_config.ps1"   
  }
 SETTINGS
 
@@ -292,7 +292,94 @@ resource "azurerm_subnet_network_security_group_association" "nsg_association" {
   subnet_id                 = azurerm_subnet.subnetA.id
   network_security_group_id = azurerm_network_security_group.app_nsg.id
 
-  depends_on = [ 
+  depends_on = [
     azurerm_network_security_group.app_nsg
-   ]
+  ]
+}
+
+#public ip address
+resource "azurerm_public_ip" "lb_pip" {
+  name                = "lb-pip"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+#load balancer
+resource "azurerm_lb" "app_lb" {
+  name                = "app_lb"
+  location            = azurerm_resource_group.mtc_rg.location
+  resource_group_name = azurerm_resource_group.mtc_rg.name
+  sku                 = "Standard"
+
+  frontend_ip_configuration {
+    name                 = "frontend-ip"
+    public_ip_address_id = azurerm_public_ip.lb_pip.id
+  }
+
+  depends_on = [
+    azurerm_public_ip.lb_pip
+  ]
+}
+
+#backend poll
+resource "azurerm_lb_backend_address_pool" "demo_bp" {
+  loadbalancer_id = azurerm_lb.app_lb.id
+  name            = "demo-bp"
+
+  depends_on = [
+    azurerm_lb.app_lb
+  ]
+}
+
+#load balancer backend address poll address
+resource "azurerm_lb_backend_address_pool_address" "vm1_address" {
+  name                    = "vm1-address"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.demo_bp.id
+  virtual_network_id      = azurerm_virtual_network.app_vnet.id
+  ip_address              = azurerm_network_interface.app_nic1.private_ip_address
+
+  depends_on = [
+    azurerm_lb_backend_address_pool.demo_bp
+  ]
+}
+
+resource "azurerm_lb_backend_address_pool_address" "vm2_address" {
+  name                    = "vm2-address"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.demo_bp.id
+  virtual_network_id      = azurerm_virtual_network.app_vnet.id
+  ip_address              = azurerm_network_interface.app_nic2.private_ip_address
+
+  depends_on = [
+    azurerm_lb_backend_address_pool.demo_bp
+  ]
+}
+
+#Health probe
+resource "azurerm_lb_probe" "test_hp" {
+  loadbalancer_id = azurerm_lb.app_lb.id
+  name            = "test_hp"
+  port            = 80
+
+  depends_on = [
+    azurerm_lb.app_lb
+  ]
+}
+
+#load balancing rule
+resource "azurerm_lb_rule" "test_lb_rule" {
+  loadbalancer_id                = azurerm_lb.app_lb.id
+  name                           = "test-lb-rule"
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = "frontend-ip"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.demo_bp.id]
+  probe_id                       = azurerm_lb_probe.test_hp.id
+
+  depends_on = [
+    azurerm_lb.app_lb,
+    azurerm_lb_probe.test_hp
+  ]
 }
